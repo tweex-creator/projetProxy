@@ -1,145 +1,122 @@
 import socket
 import threading
-import ssl
 
-# Configuration du proxy visible localement
-proxy_host_local = '127.0.0.1'  # Adresse IP du proxy que l'on fait tourner dans se programme
-proxy_host_distant = '127.0.0.1'  # Adresse IP du proxy au quel on se connecte
+# Configuration
+PROXY_OUTPUT_IP = 'localhost'
+PROXY_OUTPUT_PORT = 12345
+BUFFER_SIZE = 4096
 
-proxy_port_local_for_cli = 26664  # Port du proxy pour le client
-proxy_port_local_for_dist = 26668  # Port du proxy pour le proxy distant
-
-proxy_port_dist = 26667  # Port au quel se connecter sur le proxy distant
-
-def main():
-    # Initialisation de la socket du proxy local
-    input_local_for_cli_proxy_socketl = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #gère les requètes en provenance du client
-    input_local_for_dist_proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #gère les requètes en provenance du proxy distant
-
-    input_local_for_cli_proxy_socketl.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
-    input_local_for_dist_proxy_socket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
-
-    input_local_for_cli_proxy_socketl.bind((proxy_host_local, proxy_port_local_for_cli))
-    input_local_for_dist_proxy_socket.bind((proxy_host_local, proxy_port_local_for_dist))
-
-    input_local_for_cli_proxy_socketl.listen(50)
-    input_local_for_dist_proxy_socket.listen(50)
-
-    input_local_for_cli_proxy_socketl.setblocking(0) #On definie les socket comme non bloquant pour la suite du rpogramme
-    input_local_for_dist_proxy_socket.setblocking(0)
-
+def handle_client(client_socket, client_addr):
+    # Fonction qui va gérer la connexion avec le client
+    request = b''
     while True:
-        try:
-            conn, addr = input_local_for_cli_proxy_socketl.accept()
-            thread = threading.Thread(target=handle_input_from_user, args=(conn, addr))
-            thread.start()
-        except socket.error:
-            pass
-
-        try:
-            conn, addr = input_local_for_dist_proxy_socket.accept()
-            # Connexion acceptée
-            thread = threading.Thread(target=handle_input_from_distantProxy, args=(conn, addr))
-            thread.start()
-        except socket.error:
-            # Pas de connexion en attente, poursuite d'autres tâches
-            pass
-
-
-
-def handle_input_from_distantProxy(conn, addr):
-    distant_proxy_raw_data = b''
-    distant_proxy_data = ""
-    while True:
-        d = conn.recv(2048)
-        distant_proxy_raw_data += d
-        if not d or len(d) < 2048:
+        data = client_socket.recv(BUFFER_SIZE) #On récupère la requête du client
+        request += data
+        if len(data) < BUFFER_SIZE: #Si la taille de la requête est inférieure à la taille du buffer, on a reçu toute la requête
             break
 
-    distant_proxy_data = distant_proxy_raw_data.decode()
 
 
-    #On decrypte le message
-    url_port = distant_proxy_data.split('\n')[1]  # on récupère l'URL dans la requête
-    print(url_port)
-    url_port = url_port.split()[1]  # on récupère l'URL dans la requête
+    #TODO: La il faut décrypter la requête
+    request_line = request.split(b'\n')[0].decode('utf-8') #On récupère la première ligne de la requête
+    method, url, _ = request_line.split() #On récupère la méthode, l'url et le protocole de la requête
+    print(request_line, method, url)
 
-    url = url_port.split(":")[0]
-    port = url_port.split(":")[1]
-
-
-    debug = True
-    if url.split("/")[0] == "www.example.com" or url.split("/")[0] == "www.google.fr":
-        debug = True
-
-    if debug:
-        print("url: " + url.split("/")[0] + ", port: " + str(port))
-        print("data: " + distant_proxy_data)
+    if method in ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]: #Si la méthode est une méthode classique, on appelle la fonction handle_classic_request
+        process_request(client_socket, request)
+    elif method == "CONNECT": #Si la méthode est CONNECT, on appelle la fonction handle_connect_methode
+        process_connect(client_socket, url)
+    else:
+        response = b'HTTP/1.1 405 Method Not Allowed\r\n\r\n' #Si la méthode n'est pas supportée, on envoie une erreur 405
+        #TODO : crypter la réponse
+        client_socket.sendall(response)
+        client_socket.close()
 
 
-    outputSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    # définir l'adresse IP et le port du serveur distant
-    server_address = (url.split("/")[0], int(port))
-
-    # se connecter au serveur
-    outputSocket.connect(server_address)
-    outputSocket = ssl.wrap_socket(outputSocket, ssl_version=ssl.PROTOCOL_TLS)
-
-    outputSocket.sendall(distant_proxy_raw_data)
-
-    if debug:
-        print("envoyé to server: " + distant_proxy_data)
+def process_connect(client_socket, url):
+    # Fonction qui va gérer la connexion avec le client si la méthode est CONNECT, c'est à dire si le client veut se connecter à un site en https,
+    # dans ce cas, on doit maintenir la connexion avec le client et le site distant
+    target_host, target_port = url.split(':')  # On récupère l'adresse du site distant et le port
+    target_port = int(target_port) # On convertit le port en entier
 
     try:
-        response_from_destination_server = b''
+        remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        remote_socket.connect((target_host, target_port))
+        client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n') #On envoie une réponse 200 au client pour lui dire que la connexion est établie
+
+        remote_socket.setblocking(0) #On met les sockets en mode non bloquant pour pouvoir les utiliser en même temps
+        client_socket.setblocking(0)
+
         while True:
-            d = outputSocket.recv(1024)
-            if not d or len(d) < 1024:
-                break
-            response_from_destination_server += d
+            try:
+                request = client_socket.recv(BUFFER_SIZE) #On récupère les données envoyées par le client (via le proxy d'entrée)
+                #TODO: Il faut décrypter les données
+                if not request:
+                    break
+                remote_socket.sendall(request) #On envoie les données au site distant
+            except socket.error:
+                pass
 
-        conn.sendall(response_from_destination_server)  # on renvoie la réponse
+            try:
+                response = remote_socket.recv(BUFFER_SIZE) #On récupère les données envoyées par le site distant
+                if not response:
+                    break
+                #TODO: Il faut crypter les données
+                client_socket.sendall(response) #On envoie les données au client (via le proxy d'entrée)
+            except socket.error:
+                pass
 
-        if debug:
-            print("recus from server: " + response_from_destination_server.decode())
+    except Exception as e:
+        print(f"Erreur lors de la connexion: {e}")
 
+    finally:
+        client_socket.close() #On ferme les sockets
+        remote_socket.close()
 
-    except socket.error as e:
-            if debug:
-                print(f'Error occurred: {str(e)}')
-            pass
+def process_request(client_socket, request):
+    request_line = request.split(b'\n')[0].decode('utf-8') #On récupère la première ligne de la requête (deja decrypter dans la fonction handle_client)
+    method, url, _ = request_line.split() #On récupère la méthode, l'url et le protocole de la requête
 
+    url_data = url.split('/', 3)  # On récupère l'adresse du site distant et le chemin de la ressource demandée(3 pour ne pas avoir de / en trop, si l'url est http://www.google.fr, on aura ['http:','', 'www.google.fr', ''])
+    if len(url_data) < 4: #Si l'url n'est pas correcte, on envoie une erreur 400 au client (via le proxy d'entrée)
+        client_socket.sendall(b'HTTP/1.1 400 Bad Request\r\n\r\n')
+        client_socket.close()
+        return
 
+    target_host = url_data[2] #On récupère l'adresse du site distant
+    target_url = '/' + url_data[3] #On récupère le chemin de la ressource demandée
 
+    target_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    target_socket.connect((target_host, 80)) #On se connecte au site distant sur le port 80
 
-def handle_input_from_user(conn, addr):
-    print(f"New connection from user {addr}")
-
-    #Recuperation de la requete du client
-    request = conn.recv(4096)
-    #Modification de la requètre (cryptage)
-
-
-
-    # Initialisation de la socket pour communiquer avec le proxy distant
-    distant_proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    distant_proxy_socket.connect((proxy_host_distant, proxy_port_dist))
-
-    # Envoie de la requète au proxy distant
-    distant_proxy_socket.sendall(request)
-
-    # Recuperation de la reponse
-    data = distant_proxy_socket.recv(8192)
-
-    #Modification de la reponse (decryptage)
-
-
-    # Envoie de la réponse au client
-    conn.sendall(data)
-    conn.close()
+    #modified_request = request.replace(url.encode('utf-8'), target_url.encode('utf-8'), 1)
+    #target_socket.sendall(modified_request)
+    target_socket.sendall(request) #On envoie la requête au site distant
 
 
+    response = b''
+    while True:
+        data = target_socket.recv(BUFFER_SIZE) #On récupère la réponse du site distant,
+        response += data
+        if len(data) < BUFFER_SIZE: #Si la taille des données est inférieure à la taille du buffer, on a reçu toute la réponse
+            break
+
+    #TODO: Il faut crypter la réponse
+    client_socket.sendall(response)
+
+    client_socket.close()
+    target_socket.close()
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))
+    server.listen(50)
+    print(f"Proxy de sortie en écoute sur {PROXY_OUTPUT_IP}:{PROXY_OUTPUT_PORT}")
+
+    while True:
+        client_socket, client_addr = server.accept()
+        client_handler = threading.Thread(target=handle_client, args=(client_socket, client_addr))
+        client_handler.start()
 
 if __name__ == '__main__':
     main()
