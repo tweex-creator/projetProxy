@@ -1,5 +1,8 @@
 import socket
 import threading
+# import de "our_cryptage.py"
+import our_cryptage
+
 
 # Configuration Proxy
 PROXY_IP = '0.0.0.0' #L'ip de notre proxy, ici '0.0.0.0' veut dire que le proxy est accessible depuis n'importe quelle interface réseau de la machine
@@ -20,13 +23,38 @@ def handle_client(client_socket, client_addr): #Fonction qui va gérer la connex
         request += data
         if len(data) < BUFFER_SIZE: #Si la taille de la requête est inférieure à la taille du buffer, on a reçu toute la requête
             break
-
     request_line = request.split(b'\n')[0].decode('utf-8') #On récupère la première ligne de la requête
     method, url, _ = request_line.split() #On récupère la méthode, l'url et le protocole de la requête
     if method == "CONNECT": #Si la méthode est CONNECT, on appelle la fonction handle_connect_methode
         handle_connect_methode(client_socket, url, request)
     else: #Sinon, on appelle la fonction handle_classic_request
         handle_classic_request(client_socket, request)
+
+def check_if_secure_connection_open():
+    # Fonction qui va vérifier si une connexion sécurisée est déjà ouverte avec le proxy distant
+    # Si c'est le cas, on retourne true, sinon on retourne false
+    if our_cryptage.getSymetricKey() == None:
+        return False
+
+    message = "Ping"
+    message = message.encode('utf-8')
+    message_crypte = our_cryptage.cryptage(message)
+    output_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    output_socket.connect((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))
+    output_socket.sendall(message_crypte)
+    output_socket.setblocking(0)
+    try:
+        response = output_socket.recv(BUFFER_SIZE)
+        response = our_cryptage.decryptage(response)
+        if response == b"Pong":
+            return True
+        else:
+            start_secure_session()
+            return True
+
+    except socket.error:
+        return False
+
 
 
 def handle_connect_methode(client_socket, url, request):
@@ -85,15 +113,17 @@ def handle_classic_request(client_socket, request):
 
 def start_secure_session():
     #Fonction qui va démarrer une session sécurisée avec le proxy de sortie
-    #TODO: On genère notre clé privée et publique
+    #TODO: On envoie un message (non crypté) au proxy de sortie "START_SECURE_SESSION"
+    #TODO: On attend de recevoir un message du proxy de sortie "READY"
+    #TODO: On genère notre clé privée et publique pour le proxy d'entrée qui vas permettre d'echanger la clé symetrique de facons securisé
     #TODO: On envoie notre clé publique au proxy de sortie
-    #TODO: On reçoit la clé publique du proxy de sortie
-    #TODO: On génère la clé de cryptage/décryptage (symétrique)
-    #TODO: On envoie la clé de cryptage/décryptage au proxy de sortie via la clé publique du proxy de sortie
+    #TODO: On attend de recevoir la clé symetrique founrit par le proxy de sortie (cryptée que l'on doit decrypter avec notre clé privée)
+    #TODO: On decrypte la clé symetrique avec notre clé privée
+    #TODO: On envoie un message au proxy de sortie "OK" (crypté avec la clé symétrique)
     #TODO: On attend de recevoir un message du proxy de sortie
-    #TODO: On vérifie que le message reçu une fois decrypté est bien "OK"
-    #TODO: On envoie nous aussi un message au proxy de sortie "OK" (crypté)
-    #TODO: On attend de recevoir un message du proxy de sortie "OK" puis on retourne True et la clé symetrique de cryptage/décryptage
+    #TODO: On decrypte le message avec la clé symétriquea
+    #TODO: Si le message est "OK", on retourne True et la clé symetrique de cryptage/décryptage
+    #TODO: Sinon, on retourne False et None
 
     #TODO: return bool (True si la session est démarrée, False sinon) et la clé de cryptage/décryptage symetrique (si la session est démarrée)
     pass

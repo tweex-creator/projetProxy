@@ -1,5 +1,6 @@
 import socket
 import threading
+import our_cryptage
 
 # Configuration
 PROXY_OUTPUT_IP = 'localhost'
@@ -8,16 +9,23 @@ BUFFER_SIZE = 4096
 
 def handle_client(client_socket, client_addr):
     # Fonction qui va gérer la connexion avec le client
-    request = b''
+    request_coded = b''
     while True:
         data = client_socket.recv(BUFFER_SIZE) #On récupère la requête du client
-        request += data
+        request_coded += data
         if len(data) < BUFFER_SIZE: #Si la taille de la requête est inférieure à la taille du buffer, on a reçu toute la requête
             break
 
+    # On vérifie si le client est notre proxy d'entré qui veut démarrer une session, on le fait avant de décrypter la requête
+    if "START_SECURE_SESSION" in request_coded.decode('utf-8'):
+        # Si le client est notre proxy d'entré qui veut démarrer une session, on appelle la fonction handle_start_session
+        handle_start_secure_session_request(client_socket)
+        client_socket.close()
+        return
 
+    # On décrypte la requête
+    request = our_cryptage.decryptage(request_coded)
 
-    #TODO: La il faut décrypter la requête
     request_line = request.split(b'\n')[0].decode('utf-8') #On récupère la première ligne de la requête
     method, url, _ = request_line.split() #On récupère la méthode, l'url et le protocole de la requête
     print(request_line, method, url)
@@ -108,20 +116,29 @@ def process_request(client_socket, request):
     target_socket.close()
 
 
-def start_secure_session():
-    #TODO: Envoie un message au proxy d'entrée pour lui dire qu'on veut se connecter, c'est lui qui vas alors lancer la connexion securisée
-    pass
+def wait_for_secure_session(server):
+    #Cette fonction doit attendre que le proxy d'entrée nous envoie un message pour nous dire qu'il veut se connecter, et que toutes les autres requètes soient rejetées
+    while our_cryptage.getSymetricKey() == None:
+        client_socket, client_addr = server.accept()
+        request = client_socket.recv(BUFFER_SIZE)
+        if request.startswith(b"START_SECURE_SESSION"):
+            handle_start_secure_session_request(client_socket)
+        else:
+            client_socket.close()
 
-def handle_start_secure_session_request(client_socket):
-    #TODO: On genère notre clé privée et publique
+
+
+def handle_start_secure_session_request(client_socket): #ZAIDE
+    #Cette fonction doit etablir une communication securisé avec le proxy d'entrée
+    #TODO: On envoie un message (non crypté) "READY" au proxy d'entrée pour lui dire qu'on a bien recus ca demande et que l'on est pret
     #TODO: Attendre de recevoir un message du proxy d'entrée qui contient ca clé publique
-    #TODO: On envoie notre clé publique au proxy d'entrée
-    #TODO: Attendre de recevoir un message du proxy d'entrée qui contient ca clé symetrique chiffré avec notre clé public
-    #TODO: On déchiffre la clé symetrique avec notre clé privée
+    #TODO: On genere la cle symetrique
+    #TODO: on envoie encode la clé symetrique avec la clé public du proxy d'entrée
+    #TODO: On envoie la clé symetrique(crypté) au proxy d'entrée
+    #TODO: On attend de recevoir un message que l'on decrypte avec la clé symetrique (le message doit être "OK")
     #TODO: On envoie un message au proxy d'entrée "OK" pour lui dire que la connexion est établie en le chiffrant avec la clé symetrique
-    #TODO: On attend de recevoir un message "OK" du proxy d'entrée crypté avec la clé symetrique
-    #TODO: On envoie un message "OK" au proxy d'entrée crypté avec la clé symetrique
     #TODO: On peut maintenant envoyer des données cryptées au proxy d'entrée
+    #(La clé symetrique doit etre stockée dans une variable globale pour pouvoir l'utiliser dans les autres fonctions)
     pass
 
 def main():
@@ -129,7 +146,7 @@ def main():
     server.bind((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))
     server.listen(50)
     print(f"Proxy de sortie en écoute sur {PROXY_OUTPUT_IP}:{PROXY_OUTPUT_PORT}")
-
+    wait_for_secure_session(server)
     while True:
         client_socket, client_addr = server.accept()
         client_handler = threading.Thread(target=handle_client, args=(client_socket, client_addr))
