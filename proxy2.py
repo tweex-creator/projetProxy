@@ -107,6 +107,23 @@ def process_request(client_socket, request):
     client_socket.close()
     target_socket.close()
 
+
+def start_secure_session():
+    #TODO: Envoie un message au proxy d'entrée pour lui dire qu'on veut se connecter, c'est lui qui vas alors lancer la connexion securisée
+    pass
+
+def handle_start_secure_session_request(client_socket):
+    #TODO: On genère notre clé privée et publique
+    #TODO: Attendre de recevoir un message du proxy d'entrée qui contient ca clé publique
+    #TODO: On envoie notre clé publique au proxy d'entrée
+    #TODO: Attendre de recevoir un message du proxy d'entrée qui contient ca clé symetrique chiffré avec notre clé public
+    #TODO: On déchiffre la clé symetrique avec notre clé privée
+    #TODO: On envoie un message au proxy d'entrée "OK" pour lui dire que la connexion est établie en le chiffrant avec la clé symetrique
+    #TODO: On attend de recevoir un message "OK" du proxy d'entrée crypté avec la clé symetrique
+    #TODO: On envoie un message "OK" au proxy d'entrée crypté avec la clé symetrique
+    #TODO: On peut maintenant envoyer des données cryptées au proxy d'entrée
+    pass
+
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))

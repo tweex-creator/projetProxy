@@ -1,13 +1,17 @@
 import socket
 import threading
 
-# Configuration
+# Configuration Proxy
 PROXY_IP = '0.0.0.0' #L'ip de notre proxy, ici '0.0.0.0' veut dire que le proxy est accessible depuis n'importe quelle interface réseau de la machine
 PROXY_PORT = 12343 #Le port sur lequel le proxy va écouter
 BUFFER_SIZE = 4096 #Taille du buffer de réception
-
 PROXY_OUTPUT_IP = 'localhost' #L'ip de la machine sur laquelle tourne le proxy de sortie
 PROXY_OUTPUT_PORT = 12345 #Le port sur lequel le proxy de sortie écoute
+
+
+#Configuration Encryption / Decryption
+ENCRYPTION_KEY_SYMETRIQUE = '' #La clé de cryptage/décryptage symetrique
+
 
 def handle_client(client_socket, client_addr): #Fonction qui va gérer la connexion initiale avec le client
     request = b''
@@ -77,6 +81,33 @@ def handle_classic_request(client_socket, request):
     client_socket.sendall(response)
     client_socket.close()
     output_socket.close()
+
+
+def start_secure_session():
+    #Fonction qui va démarrer une session sécurisée avec le proxy de sortie
+    #TODO: On genère notre clé privée et publique
+    #TODO: On envoie notre clé publique au proxy de sortie
+    #TODO: On reçoit la clé publique du proxy de sortie
+    #TODO: On génère la clé de cryptage/décryptage (symétrique)
+    #TODO: On envoie la clé de cryptage/décryptage au proxy de sortie via la clé publique du proxy de sortie
+    #TODO: On attend de recevoir un message du proxy de sortie
+    #TODO: On vérifie que le message reçu une fois decrypté est bien "OK"
+    #TODO: On envoie nous aussi un message au proxy de sortie "OK" (crypté)
+    #TODO: On attend de recevoir un message du proxy de sortie "OK" puis on retourne True et la clé symetrique de cryptage/décryptage
+
+    #TODO: return bool (True si la session est démarrée, False sinon) et la clé de cryptage/décryptage symetrique (si la session est démarrée)
+    pass
+
+def exchange_keys():
+    #Fonction qui va échanger les clés entre le proxy d'entrée et le proxy de sortie
+    pass
+
+def generate_keys():
+    #Fonction qui va générer les clés de cryptage/décryptage
+    pass
+
+
+
 
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
