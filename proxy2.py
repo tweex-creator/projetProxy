@@ -16,15 +16,29 @@ def handle_client(client_socket, client_addr):
         if len(data) < BUFFER_SIZE: #Si la taille de la requête est inférieure à la taille du buffer, on a reçu toute la requête
             break
 
-    # On vérifie si le client est notre proxy d'entré qui veut démarrer une session, on le fait avant de décrypter la requête
-    if "START_SECURE_SESSION" in request_coded.decode('utf-8'):
-        # Si le client est notre proxy d'entré qui veut démarrer une session, on appelle la fonction handle_start_session
-        handle_start_secure_session_request(client_socket)
-        client_socket.close()
-        return
+    try:
+        # On vérifie si le client est notre proxy d'entré qui veut démarrer une session, on le fait avant de décrypter la requête
+        if "START_SECURE_SESSION" in request_coded.decode('utf-8'):
+            # Si le client est notre proxy d'entré qui veut démarrer une session, on appelle la fonction handle_start_session
+            handle_start_secure_session_request(client_socket)
+            client_socket.close()
+            return
+    except:
+        pass
 
     # On décrypte la requête
     request = our_cryptage.decryptage(request_coded)
+
+    if "Ping" in request.decode('utf-8'):
+        # Si le client est notre proxy de sortie qui veut vérifier si la connexion est toujours ouverte, on renvoie Pong
+        message = "Pong"
+        message = message.encode('utf-8')
+        message_crypte = our_cryptage.cryptage(message)
+        client_socket.sendall(message_crypte)
+        client_socket.close()
+        return
+
+
 
     request_line = request.split(b'\n')[0].decode('utf-8') #On récupère la première ligne de la requête
     method, url, _ = request_line.split() #On récupère la méthode, l'url et le protocole de la requête
@@ -36,7 +50,7 @@ def handle_client(client_socket, client_addr):
         process_connect(client_socket, url)
     else:
         response = b'HTTP/1.1 405 Method Not Allowed\r\n\r\n' #Si la méthode n'est pas supportée, on envoie une erreur 405
-        #TODO : crypter la réponse
+        response = our_cryptage.cryptage(response)
         client_socket.sendall(response)
         client_socket.close()
 
@@ -58,9 +72,9 @@ def process_connect(client_socket, url):
         while True:
             try:
                 request = client_socket.recv(BUFFER_SIZE) #On récupère les données envoyées par le client (via le proxy d'entrée)
-                #TODO: Il faut décrypter les données
                 if not request:
                     break
+                request = our_cryptage.decryptage(request)
                 remote_socket.sendall(request) #On envoie les données au site distant
             except socket.error:
                 pass
@@ -69,7 +83,7 @@ def process_connect(client_socket, url):
                 response = remote_socket.recv(BUFFER_SIZE) #On récupère les données envoyées par le site distant
                 if not response:
                     break
-                #TODO: Il faut crypter les données
+                response = our_cryptage.cryptage(response)
                 client_socket.sendall(response) #On envoie les données au client (via le proxy d'entrée)
             except socket.error:
                 pass
@@ -109,7 +123,7 @@ def process_request(client_socket, request):
         if len(data) < BUFFER_SIZE: #Si la taille des données est inférieure à la taille du buffer, on a reçu toute la réponse
             break
 
-    #TODO: Il faut crypter la réponse
+    response = our_cryptage.cryptage(response) #On crypte la réponse
     client_socket.sendall(response)
 
     client_socket.close()
@@ -122,6 +136,7 @@ def wait_for_secure_session(server):
         client_socket, client_addr = server.accept()
         request = client_socket.recv(BUFFER_SIZE)
         if request.startswith(b"START_SECURE_SESSION"):
+            print("Demande de connexion securisé recu")
             handle_start_secure_session_request(client_socket)
         else:
             client_socket.close()
@@ -138,7 +153,7 @@ def handle_start_secure_session_request(client_socket): #ZAIDE
     #TODO: On attend de recevoir un message que l'on decrypte avec la clé symetrique (le message doit être "OK")
     #TODO: On envoie un message au proxy d'entrée "OK" pour lui dire que la connexion est établie en le chiffrant avec la clé symetrique
     #TODO: On peut maintenant envoyer des données cryptées au proxy d'entrée
-    #(La clé symetrique doit etre stockée dans une variable globale pour pouvoir l'utiliser dans les autres fonctions)
+    #(La clé symetrique doit etre stockée avec la fonction  our_cryptage.setSymetricKey(key))
     pass
 
 def main():

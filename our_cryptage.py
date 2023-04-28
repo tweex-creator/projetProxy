@@ -4,7 +4,8 @@ from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad
 from Crypto.Util.Padding import unpad
 
-SYMETRIC_KEY = None #La clé de cryptage/décryptage symetrique
+#SYMETRIC_KEY = None #La clé de cryptage/décryptage symetrique
+SYMETRIC_KEY = b'1234567890123456' #La clé de cryptage/décryptage symetrique
 
 def cryptage(byte_message): #TODO: Herve
     #Fonction qui va crypter le message avec la clé symetrique
@@ -41,7 +42,7 @@ def setSymetricKey(key): #TODO: Herve
     #On ne manipule pas directement la variable SYMETRIC_KEY pour pouvoir par la suite utiliser un moyen plus sécurisé de stockage de la clé symetrique
     #Fonction qui va définir la clé symetrique comme étant la clé symetrique globale (variable SYMETRIC_KEY)
     global SYMETRIC_KEY
-    SYMETRIC_KEY = key
+    # SYMETRIC_KEY = key pour le test on revnoie pour le moment toujours la meme clé
     return True
 
 def getSymetricKey(): #TODO: Herve

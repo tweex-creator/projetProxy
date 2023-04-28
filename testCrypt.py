@@ -9,7 +9,7 @@ print("Clé symetrique définie: " + str(our_cryptage.getSymetricKey()))
 
 #Test de la fonction cryptage()
 print("Test de la fonction cryptage()")
-message = "Bonjour, je suis un message crypté"
+message = "Bonjour, je suis un message cryptéBonjour, je suis un message cryptéBonjour, je suis un message crypté"
 message = message.encode('utf-8')
 print("Message à crypter: " + message.decode('utf-8'))
 message_crypte = our_cryptage.cryptage(message)

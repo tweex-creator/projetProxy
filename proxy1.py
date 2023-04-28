@@ -1,6 +1,5 @@
 import socket
 import threading
-# import de "our_cryptage.py"
 import our_cryptage
 
 
@@ -12,9 +11,6 @@ PROXY_OUTPUT_IP = 'localhost' #L'ip de la machine sur laquelle tourne le proxy d
 PROXY_OUTPUT_PORT = 12345 #Le port sur lequel le proxy de sortie écoute
 
 
-#Configuration Encryption / Decryption
-ENCRYPTION_KEY_SYMETRIQUE = '' #La clé de cryptage/décryptage symetrique
-
 
 def handle_client(client_socket, client_addr): #Fonction qui va gérer la connexion initiale avec le client
     request = b''
@@ -23,6 +19,7 @@ def handle_client(client_socket, client_addr): #Fonction qui va gérer la connex
         request += data
         if len(data) < BUFFER_SIZE: #Si la taille de la requête est inférieure à la taille du buffer, on a reçu toute la requête
             break
+
     request_line = request.split(b'\n')[0].decode('utf-8') #On récupère la première ligne de la requête
     method, url, _ = request_line.split() #On récupère la méthode, l'url et le protocole de la requête
     if method == "CONNECT": #Si la méthode est CONNECT, on appelle la fonction handle_connect_methode
@@ -36,21 +33,20 @@ def check_if_secure_connection_open():
     if our_cryptage.getSymetricKey() == None:
         return False
 
-    message = "Ping"
+    message = "Ping" #On envoie un message au proxy distant pour vérifier si la connexion est toujours ouverte
     message = message.encode('utf-8')
-    message_crypte = our_cryptage.cryptage(message)
+    message_crypte = our_cryptage.cryptage(message) #On crypte le message
     output_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     output_socket.connect((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))
-    output_socket.sendall(message_crypte)
-    output_socket.setblocking(0)
+    output_socket.sendall(message_crypte) #On envoie le message crypté au proxy distant
+    print("Ping envoyé")
     try:
         response = output_socket.recv(BUFFER_SIZE)
         response = our_cryptage.decryptage(response)
         if response == b"Pong":
             return True
         else:
-            start_secure_session()
-            return True
+            return False
 
     except socket.error:
         return False
@@ -64,7 +60,13 @@ def handle_connect_methode(client_socket, url, request):
         output_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         output_socket.connect((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT)) #On se connecte au proxy de sortie
 
-        #TODO: on doit crypter la requête avant de l'envoyer au proxy de sortie
+        #On verifie que la connexion securisé est toujours ouverte(si elle ne l'ai pas on la réouvre)
+        if check_if_secure_connection_open() == False:
+            print("Ouverture d'une nouvelle connexion sécurisée")
+            start_secure_session() #On ouvre une connexion sécurisée avec le proxy distant
+
+
+        request = our_cryptage.cryptage(request) #On crypte la requête
         output_socket.sendall(request) #On envoie la requête au proxy de sortie
 
         output_socket.setblocking(0) #On met les sockets en mode non bloquants pour pouvoir gerer les deux sockets en même temps
@@ -76,8 +78,8 @@ def handle_connect_methode(client_socket, url, request):
                 request = client_socket.recv(BUFFER_SIZE) #On récupère la requête du client
                 if not request: #Si la requête est vide, on ne fait rien
                     break
-                #TODO: La il faudrait crypter la requète!!!!!
 
+                request = our_cryptage.cryptage(request) #On crypte la requête
                 output_socket.sendall(request) #On envoie la requête au proxy de sortie
             except socket.error:
                 pass
@@ -86,7 +88,8 @@ def handle_connect_methode(client_socket, url, request):
                 response = output_socket.recv(BUFFER_SIZE) #On récupère la réponse du proxy de sortie
                 if not response: #Si la réponse est vide, on ne fait rien
                     break
-                #TO DO: La il faudrait décrypter la réponse!!!!!
+
+                response = our_cryptage.decryptage(response) #On décrypte la réponse
                 client_socket.sendall(response) #On envoie la réponse au client
             except socket.error:
                 pass
@@ -102,10 +105,11 @@ def handle_classic_request(client_socket, request):
     # Fonction qui va gérer la connexion avec le client si la méthode n'est pas CONNECT, c'est à dire si le client veut se connecter à un site en http
     output_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #On se connecte au proxy de sortie
     output_socket.connect((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))
-    #TODO: on doit crypter la requête avant de l'envoyer au proxy de sortie
+
+    request = our_cryptage.cryptage(request) #On crypte la requête
     output_socket.sendall(request) #On envoie la requête au proxy de sortie
     response = output_socket.recv(BUFFER_SIZE)
-    #TODO: La il faudrait décrypter la réponse!!!!!
+    response = our_cryptage.decryptage(response) #On décrypte la réponse
     client_socket.sendall(response)
     client_socket.close()
     output_socket.close()
@@ -126,14 +130,6 @@ def start_secure_session():
     #TODO: Sinon, on retourne False et None
 
     #TODO: return bool (True si la session est démarrée, False sinon) et la clé de cryptage/décryptage symetrique (si la session est démarrée)
-    pass
-
-def exchange_keys():
-    #Fonction qui va échanger les clés entre le proxy d'entrée et le proxy de sortie
-    pass
-
-def generate_keys():
-    #Fonction qui va générer les clés de cryptage/décryptage
     pass
 
 
