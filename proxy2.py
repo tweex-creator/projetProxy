@@ -64,17 +64,17 @@ def process_connect(client_socket, url):
     try:
         remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         remote_socket.connect((target_host, target_port))
-        client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n') #On envoie une réponse 200 au client pour lui dire que la connexion est établie
+        client_socket.sendall(our_cryptage.cryptage(b'HTTP/1.1 200 Connection Established\r\n\r\n')) #On envoie une réponse 200 au client pour lui dire que la connexion est établie
 
         remote_socket.setblocking(0) #On met les sockets en mode non bloquant pour pouvoir les utiliser en même temps
         client_socket.setblocking(0)
-
+        print("CONNECTED TO", target_host, target_port)
         while True:
             try:
                 request = client_socket.recv(BUFFER_SIZE) #On récupère les données envoyées par le client (via le proxy d'entrée)
                 if not request:
                     break
-                request = our_cryptage.decryptage(request)
+                #Comme il s'agit deja de requète https, on ne la decrypte pas
                 remote_socket.sendall(request) #On envoie les données au site distant
             except socket.error:
                 pass
@@ -83,9 +83,9 @@ def process_connect(client_socket, url):
                 response = remote_socket.recv(BUFFER_SIZE) #On récupère les données envoyées par le site distant
                 if not response:
                     break
-                response = our_cryptage.cryptage(response)
+                #Comme il s'agit deja de requète https, on ne la crypte pas
                 client_socket.sendall(response) #On envoie les données au client (via le proxy d'entrée)
-            except socket.error:
+            except socket.error as e:
                 pass
 
     except Exception as e:
@@ -111,8 +111,6 @@ def process_request(client_socket, request):
     target_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     target_socket.connect((target_host, 80)) #On se connecte au site distant sur le port 80
 
-    #modified_request = request.replace(url.encode('utf-8'), target_url.encode('utf-8'), 1)
-    #target_socket.sendall(modified_request)
     target_socket.sendall(request) #On envoie la requête au site distant
 
 
