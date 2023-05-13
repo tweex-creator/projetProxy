@@ -166,38 +166,71 @@ def handle_classic_request(client_socket, url, request):
 
 
 def start_secure_session(): #TODO: Zaïde
-    #Fonction qui va démarrer une session sécurisée avec le proxy de sortie
-    #On verifie que l'echange de clés n'est pas déjà en cours
-    if our_cryptage.getConnectionState() == 1: #Si l'echange de clés est déjà en cours, on attend qu'il soit finit (il a pus être lancé dans un autre thread)
-        while our_cryptage.getConnectionState() == 1: #Si l'echange de clés est déjà en cours,
+    # Fonction qui va démarrer une session sécurisée avec le proxy de sortie
+    success = False
+    # On verifie que l'echange de clés n'est pas déjà en cours
+    if our_cryptage.getConnectionState() == 1:  # Si l'echange de clés est déjà en cours, on attend qu'il soit finit (il a pus être lancé dans un autre thread)
+        while our_cryptage.getConnectionState() == 1:  # Si l'echange de clés est déjà en cours,
             time.sleep(1)
-        if our_cryptage.getConnectionState() == 2: #Si l'echange de clés a réussi, on ne fait rien sinon on relance l'echange de clés
+        if our_cryptage.getConnectionState() == 2:  # Si l'echange de clés a réussi, on ne fait rien sinon on relance l'echange de clés
             return
 
-    #On lance l'echange de clés
-    our_cryptage.setConnectionState(1) #On indique que l'echange de clés est en cours
+    # On lance l'echange de clés
+    our_cryptage.setConnectionState(1)  # On indique que l'echange de clés est en cours
 
-    #TODO: On envoie un message (non crypté) au proxy de sortie "START_SECURE_SESSION"
-    #TODO: On attend de recevoir un message du proxy de sortie "READY"
-    #TODO: On genère notre clé privée et publique pour le proxy d'entrée qui vas permettre d'echanger la clé symetrique de facons securisé
-    #TODO: On envoie notre clé publique au proxy de sortie
-    #TODO: On attend de recevoir la clé symetrique founrit par le proxy de sortie (cryptée que l'on doit decrypter avec notre clé privée)
-    #TODO: On decrypte la clé symetrique avec notre clé privée
-    #TODO: On envoie un message au proxy de sortie "OK" (crypté avec la clé symétrique)
-    #TODO: On attend de recevoir un message du proxy de sortie
-    #TODO: On decrypte le message avec la clé symétriquea
-    #TODO: Si le message est "OK", on retourne True
-    #TODO: Sinon, on retourne False
+    # TODO: On envoie un message (non crypté) au proxy de sortie "START_SECURE_SESSION"
+    message_open_secure = "START_SECURE_SESSION"
+    message_open_secure = message_open_secure.encode('utf-8')
+    output_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    output_socket.connect((PROXY_OUTPUT_IP, PROXY_OUTPUT_PORT))
+    output_socket.sendall(message_open_secure)
 
-    success = True #temporaire
-    if success: #A modifier
-        our_cryptage.setConnectionState(2) #On indique que l'echange de clés est finit et qu'il a réussi
+    # TODO: On attend de recevoir un message du proxy de sortie "READY"
+    while True:
+        response = output_socket.recv(BUFFER_SIZE).decode('utf-8')  # On récupère la réponse du proxy de sortie
+        if response.strip() == 'READY':
+            print("Le proxy de sortie est READY et a reçu une réponse.")
+            break
+        else:
+            print("Le proxy a renvoyé une réponse inattendue :", response)
+
+    # TODO: On genère notre clé privée et publique pour le proxy d'entrée qui vas permettre d'echanger la clé symetrique de facons securisé
+    private_key, public_key = our_cryptage.getNewPublicAndPrivateKeyPair()
+    # TODO: On envoie notre clé publique au proxy de sortie
+    send_public_key = public_key.decode('utf-8')
+    output_socket.sendall(send_public_key)  # On envoie la cle public au proxy de sortie
+
+    # TODO: On attend de recevoir la clé symetrique founrit par le proxy de sortie (cryptée que l'on doit decrypter avec notre clé privée)
+    output_socket.settimeout(10)  # On attend 10 secondes max pour recevoir une réponse du proxy distant
+    while our_cryptage.getSymetricKey() is None:
+        print(' Clé symetrique non encore reçue... \n')
+        output_socket.settimeout(10)
+
+    # TODO: On decrypte la clé symetrique avec notre clé privée
+    decrypted_symetric_key = private_key.decryptage(our_cryptage.SYMETRIC_KEY)
+
+    # TODO: On envoie un message au proxy de sortie "OK" (crypté avec la clé symétrique)
+    message_crypt = output_socket.sendall(our_cryptage.SYMETRIC_KEY.cryptage("OK".encode('utf-8')))
+    response = b''
+    # TODO: On attend de recevoir un message du proxy de sortie
+    while True:
+        output_socket.settimeout(10)
+        response += output_socket.recv(BUFFER_SIZE)
+        if len(response) < BUFFER_SIZE:
+            break
+    # TODO: On decrypte le message avec la clé symétrique
+    message_decrypt = our_cryptage.SYMETRIC_KEY.decryptage(message_crypt)
+    # TODO: Si le message est "OK", on retourne True
+    if message_decrypt == "OK":
+        success = True
+    # TODO: Sinon, on retourne False
+
+    if success:
+        our_cryptage.setConnectionState(2)  # On indique que l'echange de clés est finit et qu'il a réussi
         return True
     else:
-        our_cryptage.setConnectionState(0) #On indique que l'echange de clés est finit et qu'il a échoué
+        our_cryptage.setConnectionState(0)  # On indique que l'echange de clés est finit et qu'il a échoué
         return False
-
-
 
 
 def main():

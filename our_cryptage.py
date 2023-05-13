@@ -63,10 +63,13 @@ def getSymetricKey(): #TODO: Herve
 
 
 def getNewPublicAndPrivateKeyPair(): #TODO: Zaide
-    PrivateKey = '' #La clé privée
-    PublicKey = '' #La clé publique
-    #Fonction qui va générer une clé privée et publique
-    #Les clés fournit seront differentes à chaque execution
+    # Générer une clé RSA de 2048 bits
+    key = RSA.generate(2048)
+    PrivateKey = key.export_key()  # La clé privée
+    PublicKey = key.publickey().export_key()  # La clé publique
+
+    # Fonction qui va générer une clé privée et publique
+    # Les clés fournit seront differentes à chaque execution
     return PrivateKey, PublicKey
 
 def setConnectionState(state):

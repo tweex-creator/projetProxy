@@ -142,17 +142,39 @@ def wait_for_secure_session(server):
 
 
 def handle_start_secure_session_request(client_socket): #ZAIDE
-    #Cette fonction doit etablir une communication securisé avec le proxy d'entrée
-    #TODO: On envoie un message (non crypté) "READY" au proxy d'entrée pour lui dire qu'on a bien recus ca demande et que l'on est pret
-    #TODO: Attendre de recevoir un message du proxy d'entrée qui contient ca clé publique
-    #TODO: On genere la cle symetrique
-    #TODO: on envoie encode la clé symetrique avec la clé public du proxy d'entrée
-    #TODO: On envoie la clé symetrique(crypté) au proxy d'entrée
-    #TODO: On attend de recevoir un message que l'on decrypte avec la clé symetrique (le message doit être "OK")
-    #TODO: On envoie un message au proxy d'entrée "OK" pour lui dire que la connexion est établie en le chiffrant avec la clé symetrique
-    #TODO: On peut maintenant envoyer des données cryptées au proxy d'entrée
-    #(La clé symetrique doit etre stockée avec la fonction  our_cryptage.setSymetricKey(key))
-    pass
+    # Cette fonction doit etablir une communication securisé avec le proxy d'entrée
+    # TODO: On envoie un message (non crypté) "READY" au proxy d'entrée pour lui dire qu'on a bien recus ca demande et que l'on est pret
+    message = "READY".encode('utf-8')
+    client_socket.sendall(message)
+
+    # TODO: Attendre de recevoir un message du proxy d'entrée qui contient ca clé publique
+    while True:
+        request = client_socket.recv(BUFFER_SIZE)  # On récupère le message
+        client_socket.settimeout(5)
+        if request != None:
+            break
+    # TODO: On genere la cle symetrique
+    symetric_key = our_cryptage.getSymetricKey()
+    # TODO: on envoie encode la clé symetrique avec la clé public du proxy d'entrée
+    symetric_crypt = our_cryptage.getNewPublicAndPrivateKeyPair()[1].cryptage(symetric_key.decode('utf-8'))
+    # TODO: On envoie la clé symetrique(crypté) au proxy d'entrée
+    client_socket.sendall(symetric_crypt)
+    # TODO: On attend de recevoir un message que l'on decrypte avec la clé symetrique (le message doit être "OK")
+    client_socket.settimeout(10)
+    message_recu = client_socket.recv(BUFFER_SIZE)
+
+    while message_recu != "OK":
+        print('Decryptage en cours ... \n')
+        message_recu = our_cryptage.decryptage(message_recu)
+
+    # TODO: On envoie un message au proxy d'entrée "OK" pour lui dire que la connexion est établie en le chiffrant avec la clé symetrique
+    client_socket.sendall("OK".encode('utf-8'))
+    client_socket.settimeout(10)
+    # TODO: On peut maintenant envoyer des données cryptées au proxy d'entrée
+    our_cryptage.setSymetricKey(symetric_key)
+    print('On peut maintenant envoyer des données cryptées au proxy d entrée... \n')
+    # (La clé symetrique doit etre stockée avec la fonction  our_cryptage.setSymetricKey(key))
+
 
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
