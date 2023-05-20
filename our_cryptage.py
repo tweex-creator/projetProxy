@@ -13,6 +13,7 @@ def cryptage(byte_message): #TODO: Herve
     #Fonction qui va crypter le message avec la clé symetrique
     #si les clé symetrique n'est pas initialisée(il faut demarer une session securiser), on retourne none
     if getSymetricKey() == None or CONNECTION_STATE == 0:
+        print("Clé symetrique ou connexion non initialisée")
         return None
     else:
         #On crypte le message avec la clé symetrique
